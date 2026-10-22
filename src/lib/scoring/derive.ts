@@ -18,3 +18,11 @@ export function deriveTotalScore(session: ScoredSession): number {
     .filter((s) => keys.has(s.attributeKey))
     .reduce((sum, s) => sum + s.value, 0);
 }
+
+/// The attribute plotted on roast trend charts (the CVA affective score).
+export const TREND_ATTRIBUTE_KEY = "overall_quality";
+
+/// Value of one attribute for a session, or null if it wasn't recorded.
+export function scoreOf(session: ScoredSession, attributeKey: string): number | null {
+  return session.scores.find((s) => s.attributeKey === attributeKey)?.value ?? null;
+}

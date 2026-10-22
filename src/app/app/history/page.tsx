@@ -3,11 +3,12 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc/client";
-import { deriveTotalScore } from "@/lib/scoring/derive";
+import { scoreOf, TREND_ATTRIBUTE_KEY } from "@/lib/scoring/derive";
+import { QueryError } from "@/components/QueryError";
 import { ScoreTrendChart } from "@/components/ScoreTrendChart";
 
 export default function HistoryPage() {
-  const { data: roasts, isLoading } = trpc.roast.list.useQuery();
+  const { data: roasts, isLoading, error, refetch } = trpc.roast.list.useQuery();
   const [coffeeFilter, setCoffeeFilter] = useState<string>("all");
 
   const coffeeNames = useMemo(
@@ -19,12 +20,12 @@ export default function HistoryPage() {
     const rows = (roasts ?? [])
       .filter((r) => coffeeFilter === "all" || r.coffeeName === coffeeFilter)
       .flatMap((roast) =>
-        roast.cuppingSessions.map((session) => ({
-          roastId: roast.id,
-          coffeeName: roast.coffeeName,
-          cuppedAt: session.cuppedAt,
-          score: deriveTotalScore(session),
-        })),
+        roast.cuppingSessions.flatMap((session) => {
+          const score = scoreOf(session, TREND_ATTRIBUTE_KEY);
+          return score === null
+            ? []
+            : [{ roastId: roast.id, coffeeName: roast.coffeeName, cuppedAt: session.cuppedAt, score }];
+        }),
       )
       .sort((a, b) => new Date(a.cuppedAt).getTime() - new Date(b.cuppedAt).getTime());
     return rows;
@@ -55,9 +56,10 @@ export default function HistoryPage() {
       </div>
 
       {isLoading && <p className="text-sm text-neutral-500">Loading...</p>}
+      {error && <QueryError error={error} onRetry={() => refetch()} />}
 
       <div className="rounded-md border border-neutral-200 p-4">
-        <h2 className="mb-2 text-sm font-medium text-neutral-600">Score over time</h2>
+        <h2 className="mb-2 text-sm font-medium text-neutral-600">Overall quality over time</h2>
         <ScoreTrendChart data={chartData} />
       </div>
 

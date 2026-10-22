@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { trpc } from "@/lib/trpc/client";
+import { QueryError } from "@/components/QueryError";
 
 export default function RoastsPage() {
-  const { data: roasts, isLoading } = trpc.roast.list.useQuery();
+  const { data: roasts, isLoading, error, refetch } = trpc.roast.list.useQuery();
 
   return (
     <div className="flex flex-col gap-4">
@@ -19,6 +20,7 @@ export default function RoastsPage() {
       </div>
 
       {isLoading && <p className="text-sm text-neutral-500">Loading...</p>}
+      {error && <QueryError error={error} onRetry={() => refetch()} />}
 
       {roasts?.length === 0 && (
         <p className="text-sm text-neutral-500">

@@ -61,8 +61,9 @@ jobs:
       - run: npm run prisma:validate
       - run: npm run prisma:generate
 
-  # Applies the schema to a throwaway Postgres and runs the same integrity
-  # checks as `npm run check:db` (tables present, no drift from schema.prisma).
+  # Applies the schema to a throwaway Postgres, runs the same integrity checks
+  # as `npm run check:db` (tables present, no drift from schema.prisma), then
+  # the API integration tests.
   database:
     runs-on: ubuntu-latest
     services:
@@ -84,6 +85,9 @@ jobs:
       - run: npm ci
       - run: npx prisma db push
       - run: npm run check:db
+      # Real routers against the real schema as two users: ownership,
+      # validation and cascade deletes (Phase 1 invariants).
+      - run: npm run test:integration
 
   build:
     runs-on: ubuntu-latest
