@@ -36,11 +36,12 @@ feature.
    ```bash
    npx prisma db push
    ```
-3. In the Supabase dashboard, enable email OTP (magic link) sign-in and set
+3. Validate the setup: `npm run check:env && npm run check:db`.
+4. In the Supabase dashboard, enable email OTP (magic link) sign-in and set
    the redirect URL to `<site>/auth/callback`.
-4. In the Stripe dashboard, point a webhook at `<site>/api/stripe/webhook`
+5. In the Stripe dashboard, point a webhook at `<site>/api/stripe/webhook`
    listening for `customer.subscription.*` events.
-5. Run the dev server:
+6. Run the dev server (it refuses to start if the environment is invalid):
    ```bash
    npm run dev
    ```
@@ -50,4 +51,9 @@ feature.
 - `npm run dev` — start the dev server
 - `npm run build` — production build (also type-checks)
 - `npm run lint` — ESLint
+- `npm run typecheck` / `npm test` / `npm run ci` — type check, unit tests, full local gate
+- `npm run preflight` — env, database, auth and Stripe readiness checks
+- `npm run check:smoke` — route/guard smoke test against a running server
 - `npx prisma studio` — inspect the database
+
+See `docs/phase-0.md` for the full "healthy app" checklist.

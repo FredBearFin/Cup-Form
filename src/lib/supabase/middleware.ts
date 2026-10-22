@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
+import { classifyRoute } from "./route-access";
 
 /// Refreshes the Supabase auth session on every request so server
 /// components always see a valid (non-expired) session cookie.
@@ -29,8 +30,9 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isAuthRoute = request.nextUrl.pathname.startsWith("/login");
-  const isProtectedRoute = request.nextUrl.pathname.startsWith("/app");
+  const access = classifyRoute(request.nextUrl.pathname);
+  const isAuthRoute = access === "auth";
+  const isProtectedRoute = access === "protected";
 
   if (!user && isProtectedRoute) {
     const redirectUrl = request.nextUrl.clone();
