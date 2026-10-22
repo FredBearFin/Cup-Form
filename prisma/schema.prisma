@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Mirrors Supabase Auth's auth.users row for the current user; Supabase
+/// issues the id (uuid), so this table only tracks app-specific fields.
+model User {
+  id        String   @id @db.Uuid
+  email     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  roasts        Roast[]
+  subscription  Subscription?
+
+  @@map("users")
+}
+
+model Roast {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  coffeeName  String   @map("coffee_name")
+  origin      String?
+  variety     String?
+  process     String?
+  roastDate   DateTime @map("roast_date") @db.Date
+  batchSizeG  Int?     @map("batch_size_g")
+  roastLevel  String?  @map("roast_level")
+  roastTimeS  Int?     @map("roast_time_s")
+  notes       String?
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  cuppingSessions CuppingSession[]
+
+  @@index([userId, roastDate])
+  @@map("roasts")
+}
+
+/// One cupping/tasting pass over a roast. A roast can be cupped more than
+/// once (e.g. day 1 and day 5 after roasting).
+model CuppingSession {
+  id        String   @id @default(uuid()) @db.Uuid
+  roastId   String   @map("roast_id") @db.Uuid
+  roast     Roast    @relation(fields: [roastId], references: [id], onDelete: Cascade)
+
+  cuppedAt  DateTime @default(now()) @map("cupped_at")
+
+  /// Which versioned scoring config this session's scores were recorded
+  /// against (see src/lib/scoring/schemas). Lets CVA's evolving standard,
+  /// or a future legacy 0-100 form, coexist without migrating old data.
+  scoringSchemaVersion String @map("scoring_schema_version")
+
+  overallNote String? @map("overall_note")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  scores CuppingScore[]
+
+  @@index([roastId])
+  @@map("cupping_sessions")
+}
+
+/// One attribute value within a cupping session (e.g. "fragrance_aroma":
+/// 7.5). Storing raw per-attribute values, not a pre-summed total, lets the
+/// derived score be recomputed if a schema version's weighting changes.
+model CuppingScore {
+  id          String         @id @default(uuid()) @db.Uuid
+  sessionId   String         @map("session_id") @db.Uuid
+  session     CuppingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  attributeKey String  @map("attribute_key")
+  value        Float
+  descriptor   String?
+
+  @@unique([sessionId, attributeKey])
+  @@map("cupping_scores")
+}
+
+model Subscription {
+  id                   String    @id @default(uuid()) @db.Uuid
+  userId               String    @unique @map("user_id") @db.Uuid
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  stripeCustomerId     String?   @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?   @unique @map("stripe_subscription_id")
+  status               String    @default("trialing")
+  priceId              String?   @map("price_id")
+  trialEndsAt          DateTime? @map("trial_ends_at")
+  currentPeriodEnd     DateTime? @map("current_period_end")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("subscriptions")
+}
