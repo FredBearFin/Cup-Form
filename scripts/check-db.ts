@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { requireValidEnv } from "./lib/require-env.ts";
 import { Report } from "./lib/report.ts";
 
-const REQUIRED_TABLES = ["users", "roasts", "cupping_sessions", "cupping_scores", "subscriptions"];
+const REQUIRED_TABLES = ["users", "roasts", "cupping_sessions", "cupping_scores", "subscriptions", "audit_logs", "webhook_events"];
 
 requireValidEnv();
 const report = new Report("Database bootstrap");
@@ -29,7 +29,7 @@ await report.run(`App tables present (${REQUIRED_TABLES.join(", ")})`, async () 
     SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`;
   const present = new Set(rows.map((r) => r.table_name));
   const missing = REQUIRED_TABLES.filter((t) => !present.has(t));
-  if (missing.length) throw new Error(`missing: ${missing.join(", ")} (run \`npx prisma db push\`)`);
+  if (missing.length) throw new Error(`missing: ${missing.join(", ")} (run \`npm run db:migrate\`)`);
 });
 
 await prisma.$disconnect();
@@ -48,7 +48,16 @@ await report.run("Database schema matches prisma/schema.prisma", async () => {
     );
   } catch (err) {
     const out = (err as { stdout?: string }).stdout ?? "";
-    throw new Error(`drift detected (run \`npx prisma db push\`):\n${out.trim()}`);
+    throw new Error(`drift detected (run \`npm run db:migrate\`):\n${out.trim()}`);
+  }
+});
+
+await report.run("Every committed migration is applied, none failed", async () => {
+  try {
+    execFileSync("npx", ["prisma", "migrate", "status"], { encoding: "utf8", stdio: "pipe" });
+  } catch (err) {
+    const out = (err as { stdout?: string }).stdout ?? "";
+    throw new Error(`migration status not clean (run \`npm run db:migrate\`):\n${out.trim()}`);
   }
 });
 

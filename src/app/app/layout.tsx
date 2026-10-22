@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { AppNav } from "@/components/AppNav";
-import { BillingGate } from "@/components/BillingGate";
+import { BillingStatus } from "@/components/BillingStatus";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createSupabaseServerClient();
@@ -17,7 +17,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <ServiceWorkerRegistration />
       <AppNav />
       <main className="flex flex-1 flex-col px-4 py-6">
-        <BillingGate>{children}</BillingGate>
+        <BillingStatus>{children}</BillingStatus>
       </main>
     </div>
   );

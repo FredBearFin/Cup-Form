@@ -60,6 +60,8 @@ export const REQUIRED_VARS = {
 /// values would silently break Stripe redirects, so they are checked if set.
 export const OPTIONAL_VARS = {
   siteUrl: { name: "NEXT_PUBLIC_SITE_URL", validate: url(["https:", "http:"]) },
+  /// Where Critical monitoring alerts are pushed (Slack-compatible webhook).
+  monitoringWebhookUrl: { name: "MONITORING_WEBHOOK_URL", validate: url(["https:", "http:"]) },
 } as const satisfies Record<string, { name: string; validate: Validator }>;
 
 export type ConfigKey = keyof typeof REQUIRED_VARS;

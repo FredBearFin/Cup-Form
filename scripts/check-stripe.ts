@@ -26,7 +26,13 @@ await report.run("Webhook endpoint configured for /api/stripe/webhook", async ()
   );
   if (!match) throw new Error("no enabled endpoint pointing at /api/stripe/webhook");
   const events = new Set(match.enabled_events);
-  const needed = ["customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"];
+  const needed = [
+    "customer.subscription.created",
+    "customer.subscription.updated",
+    "customer.subscription.deleted",
+    "invoice.paid",
+    "invoice.payment_failed",
+  ];
   const missing = events.has("*") ? [] : needed.filter((e) => !events.has(e));
   if (missing.length) throw new Error(`${match.url} is not subscribed to: ${missing.join(", ")}`);
   return match.url;

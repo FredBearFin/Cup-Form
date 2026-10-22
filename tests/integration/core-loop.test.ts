@@ -21,7 +21,10 @@ const userIds: string[] = [];
 
 async function createUser() {
   const id = randomUUID();
-  await prisma.user.create({ data: { id, email: `${id}@integration.test` } });
+  // Phase 2/1 behaviour is tested on a paid plan; plan-limits.test.ts covers Free.
+  await prisma.user.create({
+    data: { id, email: `${id}@integration.test`, subscription: { create: { status: "active", priceId: "price_test" } } },
+  });
   userIds.push(id);
   return id;
 }

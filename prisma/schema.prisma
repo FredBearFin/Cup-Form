@@ -102,3 +102,37 @@ model Subscription {
 
   @@map("subscriptions")
 }
+
+/// Append-only record of who changed what (Inv_AuditLogAppendOnly). There is
+/// deliberately no relation to `users`: entries must outlive the user row,
+/// and a database trigger (see the audit_logs migration) rejects UPDATE,
+/// DELETE and TRUNCATE.
+model AuditLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  entityType    String   @map("entity_type")
+  entityId      String   @map("entity_id") @db.Uuid
+  action        String
+  timestamp     DateTime @default(now())
+  previousValue String?  @map("previous_value")
+  newValue      String?  @map("new_value")
+
+  @@index([userId, timestamp])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+/// Ledger of Stripe webhook deliveries. The primary key is Stripe's event id,
+/// so a redelivered event cannot be recorded (or applied) twice
+/// (Inv_WebhookIdempotency).
+model WebhookEvent {
+  id          String    @id
+  type        String
+  payload     String
+  signature   String
+  receivedAt  DateTime  @default(now()) @map("received_at")
+  processed   Boolean   @default(false)
+  processedAt DateTime? @map("processed_at")
+
+  @@map("webhook_events")
+}

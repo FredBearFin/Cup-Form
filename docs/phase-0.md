@@ -37,7 +37,7 @@ Run top to bottom; every step is one command.
 
 1. `npm install` (also runs `prisma generate`)
 2. `npm run check:env` — all required config present and well-formed
-3. `npx prisma db push` (or migrations) then `npm run check:db` — DB reachable,
+3. `npm run db:migrate` (versioned migrations; see phase-3.md) then `npm run check:db` — DB reachable,
    Prisma client works, `users / roasts / cupping_sessions / cupping_scores /
    subscriptions` exist, and the DB has no drift from `prisma/schema.prisma`
 4. `npm run check:auth` — Supabase reachable with the anon key, Email OTP enabled
@@ -74,7 +74,7 @@ Supabase does not expose its redirect allow-list to the anon key, so
 ## CI (`.github/workflows/ci.yml`)
 
 Jobs: `lint`, `typecheck`, `unit-tests`, `prisma-generate` (validate + generate),
-`database` (Postgres service: `db push` + `check:db`), `build`, and `smoke`
+`database` (Postgres service: `db:migrate` + `check:db`), `build`, and `smoke`
 (boots the production server and runs `check:smoke`). CI uses placeholder env
 values of the correct shape; no secrets are required.
 
@@ -83,7 +83,7 @@ values of the correct shape; no secrets are required.
 | Spec | Implementation |
 | --- | --- |
 | ValidateEnvironment | `validateEnvironment()` in `src/lib/config/env.ts`, `check:env`, startup gate |
-| BootstrapDatabase | `check:db`, `prisma:generate`, `db:push`, CI `database` job |
+| BootstrapDatabase | `check:db`, `prisma:generate`, `db:migrate`, CI `database` job |
 | ConfigureAuth | `check:auth`, `route-access.ts`, `tests/route-access.test.ts`, `check:smoke` |
 | ConfigureStripe | `check:stripe`, `tests/stripe-webhook.test.ts` |
 | CreateCI | `.github/workflows/ci.yml` |

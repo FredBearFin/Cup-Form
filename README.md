@@ -32,15 +32,16 @@ feature.
      `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
    - Stripe `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and a price ID for
      each of `STRIPE_PRICE_ID_MONTHLY` / `STRIPE_PRICE_ID_ANNUAL`.
-2. Push the schema to your Supabase database:
+2. Apply the versioned migrations to your Supabase database:
    ```bash
-   npx prisma db push
+   npm run db:migrate
    ```
 3. Validate the setup: `npm run check:env && npm run check:db`.
 4. In the Supabase dashboard, enable email OTP (magic link) sign-in and set
    the redirect URL to `<site>/auth/callback`.
 5. In the Stripe dashboard, point a webhook at `<site>/api/stripe/webhook`
-   listening for `customer.subscription.*` events.
+   listening for `customer.subscription.created|updated|deleted`, `invoice.paid` and
+   `invoice.payment_failed` events.
 6. Run the dev server (it refuses to start if the environment is invalid):
    ```bash
    npm run dev

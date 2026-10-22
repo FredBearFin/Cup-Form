@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db/prisma";
+import { getPlanLimits } from "@/server/billing";
 import { ManageBillingButton } from "@/components/ManageBillingButton";
 
 const fmt = (d: Date) => d.toLocaleDateString("en-US", { dateStyle: "medium", timeZone: "UTC" });
@@ -14,11 +15,18 @@ export default async function SettingsPage() {
 
   const subscription = await prisma.subscription.findUnique({ where: { userId: user.id } });
 
-  let plan = "No active plan";
-  if (subscription?.status === "trialing" && subscription.trialEndsAt) {
+  const limits = await getPlanLimits(prisma, user.id);
+
+  let plan = "Free plan";
+  if (limits.tier === "free") {
+    if (subscription?.status === "trialing") plan = "Free plan — trial ended";
+    else if (subscription?.status === "canceled") plan = "Free plan — subscription canceled";
+  } else if (subscription?.status === "trialing" && subscription.trialEndsAt) {
     plan = `Free trial — ends ${fmt(subscription.trialEndsAt)}`;
   } else if (subscription?.status === "active") {
     plan = subscription.currentPeriodEnd ? `Active — renews ${fmt(subscription.currentPeriodEnd)}` : "Active";
+  } else if (subscription?.status === "past_due") {
+    plan = "Payment failed — update your billing details";
   } else if (subscription) {
     plan = subscription.status.replaceAll("_", " ");
   }

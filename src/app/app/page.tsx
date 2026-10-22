@@ -14,6 +14,7 @@ import { emptyFilters, toListInput, type FilterState } from "@/lib/roast/filter-
 import { roastScore } from "@/lib/roast/sort";
 import { canCompare } from "@/lib/roast/compare";
 import { roastLevelLabel } from "@/lib/roast/enums";
+import { COMPARISON_PLAN_MESSAGE } from "@/lib/billing/plans";
 
 export default function RoastsPage() {
   const [filters, setFilters] = useState<FilterState>(emptyFilters);
@@ -29,6 +30,10 @@ export default function RoastsPage() {
     placeholderData: keepPreviousData,
   });
   const { data: origins = [] } = trpc.roast.origins.useQuery();
+  // Unknown while loading: gated actions stay usable and the server decides.
+  const { data: plan } = trpc.subscription.plan.useQuery();
+  const exportLocked = plan ? !plan.limits.exportEnabled : false;
+  const compareLocked = plan ? !plan.limits.comparisonEnabled : false;
 
   const results = roasts ?? [];
   const filterCount = activeFilterCount(filters);
@@ -99,7 +104,7 @@ export default function RoastsPage() {
             {selectedRoasts.length > 0 ? `${selectedRoasts.length} selected` : "Select all"}
           </label>
           <div className="flex items-center gap-2">
-            {compareReady ? (
+            {compareReady && !compareLocked ? (
               <Link
                 href={`/app/compare?a=${selectedRoasts[0].id}&b=${selectedRoasts[1].id}`}
                 className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
@@ -110,7 +115,9 @@ export default function RoastsPage() {
               <button
                 disabled
                 title={
-                  selectedRoasts.length === 2
+                  compareLocked
+                    ? COMPARISON_PLAN_MESSAGE
+                    : selectedRoasts.length === 2
                     ? "These roasts share no origin, process, or roast level"
                     : "Select two roasts that share an origin, process, or roast level"
                 }
@@ -119,11 +126,11 @@ export default function RoastsPage() {
                 Compare
               </button>
             )}
-            <ExportButton roastIds={selectedRoasts.map((r) => r.id)} />
+            <ExportButton roastIds={selectedRoasts.map((r) => r.id)} locked={exportLocked} />
           </div>
         </div>
       )}
-      {selectedRoasts.length === 2 && !compareReady && (
+      {selectedRoasts.length === 2 && !compareReady && !compareLocked && (
         <p className="text-sm text-neutral-500">Compare needs two roasts that share an origin, process, or roast level.</p>
       )}
 

@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db/prisma";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { roastsToCsv } from "@/lib/export/csv";
 import { roastsToPdf } from "@/lib/export/pdf";
+import { EXPORT_PLAN_MESSAGE } from "@/lib/billing/plans";
+import { getPlanLimits } from "@/server/billing";
 import { ExportNotFoundError, loadOwnedRoastsForExport } from "@/server/export";
 
 const bodySchema = z.object({
@@ -19,6 +21,11 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Inv_ExportGatedByPlan
+  if (!(await getPlanLimits(prisma, user.id)).exportEnabled) {
+    return NextResponse.json({ error: EXPORT_PLAN_MESSAGE }, { status: 403 });
+  }
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid export request" }, { status: 400 });

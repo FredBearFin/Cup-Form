@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useToast } from "@/components/ToastProvider";
+import { EXPORT_PLAN_MESSAGE } from "@/lib/billing/plans";
 
 type Format = "CSV" | "PDF";
 
@@ -13,7 +14,7 @@ function filenameFrom(res: Response, format: Format) {
 /// Op_ExportRoastData: posts the selected ids, shows progress while the file
 /// is generated, then downloads it and confirms with a toast. Disabled with
 /// nothing selected (Inv_ExportGate); the server re-checks ownership.
-export function ExportButton({ roastIds }: { roastIds: string[] }) {
+export function ExportButton({ roastIds, locked = false }: { roastIds: string[]; locked?: boolean }) {
   const toast = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
   const [exportInProgress, setExportInProgress] = useState(false);
@@ -48,7 +49,8 @@ export function ExportButton({ roastIds }: { roastIds: string[] }) {
     }
   }
 
-  const disabled = roastIds.length === 0 || exportInProgress;
+  // `locked`: the plan has no export (the server also refuses, Inv_ExportGatedByPlan).
+  const disabled = roastIds.length === 0 || exportInProgress || locked;
 
   return (
     <div className="relative">
@@ -58,7 +60,13 @@ export function ExportButton({ roastIds }: { roastIds: string[] }) {
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         aria-busy={exportInProgress}
-        title={roastIds.length === 0 ? "Select one or more roasts to export" : undefined}
+        title={
+          locked
+            ? EXPORT_PLAN_MESSAGE
+            : roastIds.length === 0
+              ? "Select one or more roasts to export"
+              : undefined
+        }
         className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm disabled:opacity-50"
       >
         {exportInProgress ? "Exporting..." : "Export"}

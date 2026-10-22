@@ -1,10 +1,14 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import type { Roast } from "@prisma/client";
 import { protectedProcedure, router } from "@/server/trpc/trpc";
 import { PROCESSES, ROAST_LEVELS } from "@/lib/roast/enums";
 import { buildRoastWhere, roastQuerySchema } from "@/lib/roast/query";
 import { sortRoasts } from "@/lib/roast/sort";
 import { buildComparison, sharedDimensions } from "@/lib/roast/compare";
+import { COMPARISON_PLAN_MESSAGE, roastCreateBlock } from "@/lib/billing/plans";
+import { recordAuditEntry } from "@/lib/audit/log";
+import { getPlanLimits, lockUserForWrite, planLimitError } from "@/server/billing";
 
 const text = (max: number) => z.string().trim().max(max);
 
@@ -33,6 +37,19 @@ const roastUpdateInput = z.object({
   roastLevel: roastInput.shape.roastLevel.nullable().optional(),
   roastTimeS: roastInput.shape.roastTimeS.nullable().optional(),
   notes: roastInput.shape.notes.nullable().optional(),
+});
+
+/// What the audit log keeps of a roast: its own columns, not its cuppings.
+const auditSnapshot = (r: Roast) => ({
+  coffeeName: r.coffeeName,
+  origin: r.origin,
+  variety: r.variety,
+  process: r.process,
+  roastDate: r.roastDate,
+  batchSizeG: r.batchSizeG,
+  roastLevel: r.roastLevel,
+  roastTimeS: r.roastTimeS,
+  notes: r.notes,
 });
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND", message: "Roast not found" });
@@ -67,6 +84,10 @@ export const roastRouter = router({
   compare: protectedProcedure
     .input(z.object({ roastIdA: z.string().uuid(), roastIdB: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
+      // Inv_ComparisonGatedByPlan
+      if (!(await getPlanLimits(ctx.prisma, ctx.userId)).comparisonEnabled) {
+        throw planLimitError(COMPARISON_PLAN_MESSAGE);
+      }
       if (input.roastIdA === input.roastIdB) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Pick two different roasts to compare" });
       }
@@ -99,31 +120,61 @@ export const roastRouter = router({
       return roast;
     }),
 
+  /// Op_EnforcePlanLimitOnRoastCreate runs before the insert; the count, the
+  /// insert and the audit entry share one transaction under a per-user lock.
   create: protectedProcedure.input(roastInput).mutation(({ ctx, input }) =>
-    ctx.prisma.roast.create({
-      data: { ...input, userId: ctx.userId },
+    ctx.prisma.$transaction(async (tx) => {
+      await lockUserForWrite(tx, ctx.userId);
+      const blocked = roastCreateBlock(await getPlanLimits(tx, ctx.userId), await tx.roast.count({ where: { userId: ctx.userId } }));
+      if (blocked) throw planLimitError(blocked);
+
+      const roast = await tx.roast.create({ data: { ...input, userId: ctx.userId } });
+      await recordAuditEntry(tx, {
+        userId: ctx.userId,
+        entityType: "Roast",
+        entityId: roast.id,
+        action: "Created",
+        newValue: auditSnapshot(roast),
+      });
+      return roast;
     }),
   ),
 
-  update: protectedProcedure.input(roastUpdateInput).mutation(async ({ ctx, input }) => {
-    const { id, ...data } = input;
-    // Scope the update to the owning user so one user can't edit another's roast.
-    const { count } = await ctx.prisma.roast.updateMany({
-      where: { id, userId: ctx.userId },
-      data,
-    });
-    if (count === 0) throw notFound();
-    return ctx.prisma.roast.findUniqueOrThrow({ where: { id } });
-  }),
+  update: protectedProcedure.input(roastUpdateInput).mutation(({ ctx, input }) =>
+    ctx.prisma.$transaction(async (tx) => {
+      const { id, ...data } = input;
+      // Scope to the owning user so one user can't edit another's roast.
+      const before = await tx.roast.findFirst({ where: { id, userId: ctx.userId } });
+      if (!before) throw notFound();
+      const after = await tx.roast.update({ where: { id }, data });
+      await recordAuditEntry(tx, {
+        userId: ctx.userId,
+        entityType: "Roast",
+        entityId: id,
+        action: "Updated",
+        previousValue: auditSnapshot(before),
+        newValue: auditSnapshot(after),
+      });
+      return after;
+    }),
+  ),
 
   /// Cascades to the roast's cupping sessions and scores (schema onDelete).
   delete: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ ctx, input }) => {
-      const { count } = await ctx.prisma.roast.deleteMany({
-        where: { id: input.id, userId: ctx.userId },
-      });
-      if (count === 0) throw notFound();
-      return { id: input.id };
-    }),
+    .mutation(({ ctx, input }) =>
+      ctx.prisma.$transaction(async (tx) => {
+        const before = await tx.roast.findFirst({ where: { id: input.id, userId: ctx.userId } });
+        if (!before) throw notFound();
+        await tx.roast.delete({ where: { id: input.id } });
+        await recordAuditEntry(tx, {
+          userId: ctx.userId,
+          entityType: "Roast",
+          entityId: input.id,
+          action: "Deleted",
+          previousValue: auditSnapshot(before),
+        });
+        return { id: input.id };
+      }),
+    ),
 });
