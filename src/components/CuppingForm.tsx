@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { trpc } from "@/lib/trpc/client";
+import { useToast } from "@/components/ToastProvider";
 import {
   allAttributes,
   cvaV1,
@@ -53,10 +54,12 @@ export function CuppingForm({ roastId, onSaved }: { roastId: string; onSaved?: (
   const [overallNote, setOverallNote] = useState("");
 
   const utils = trpc.useUtils();
+  const toast = useToast();
   const createSession = trpc.cupping.create.useMutation({
     onSuccess: async () => {
       await utils.roast.byId.invalidate({ id: roastId });
       await utils.roast.list.invalidate();
+      toast.success("Cupping saved");
       onSaved?.();
     },
   });
@@ -120,9 +123,6 @@ export function CuppingForm({ roastId, onSaved }: { roastId: string; onSaved?: (
       >
         {createSession.isPending ? "Saving..." : "Save cupping"}
       </button>
-      {createSession.isError && (
-        <p className="text-sm text-red-600">{createSession.error.message}</p>
-      )}
     </form>
   );
 }

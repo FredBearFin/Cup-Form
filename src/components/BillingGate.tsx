@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { trpc } from "@/lib/trpc/client";
+import { useToast } from "@/components/ToastProvider";
 
 const ACTIVE_STATUSES = new Set(["trialing", "active"]);
 
 export function BillingGate({ children }: { children: React.ReactNode }) {
   const { data: subscription, isLoading } = trpc.subscription.me.useQuery();
+  const toast = useToast();
   const [pending, setPending] = useState<"monthly" | "annual" | null>(null);
 
   if (isLoading) return <p className="text-sm text-neutral-500">Loading...</p>;
@@ -21,14 +23,22 @@ export function BillingGate({ children }: { children: React.ReactNode }) {
 
   async function startCheckout(plan: "monthly" | "annual") {
     setPending(plan);
-    const res = await fetch("/api/stripe/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan }),
-    });
-    const { url } = await res.json();
-    if (url) window.location.href = url;
-    else setPending(null);
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan }),
+      });
+      const { url } = await res.json();
+      if (url) {
+        window.location.href = url;
+        return;
+      }
+    } catch {
+      // fall through to the error toast
+    }
+    toast.error("Could not start checkout. Please try again.");
+    setPending(null);
   }
 
   return (

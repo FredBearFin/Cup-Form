@@ -2,6 +2,9 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "@/server/trpc/trpc";
 import { PROCESSES, ROAST_LEVELS } from "@/lib/roast/enums";
+import { buildRoastWhere, roastQuerySchema } from "@/lib/roast/query";
+import { sortRoasts } from "@/lib/roast/sort";
+import { buildComparison, sharedDimensions } from "@/lib/roast/compare";
 
 const text = (max: number) => z.string().trim().max(max);
 
@@ -35,13 +38,55 @@ const roastUpdateInput = z.object({
 const notFound = () => new TRPCError({ code: "NOT_FOUND", message: "Roast not found" });
 
 export const roastRouter = router({
-  list: protectedProcedure.query(({ ctx }) =>
-    ctx.prisma.roast.findMany({
-      where: { userId: ctx.userId },
+  /// Op_ApplyFilter + Op_ApplySort. Filtering happens in the database and is
+  /// always scoped to the caller; sorting by score/activity needs the
+  /// sessions, which are already loaded, so it runs on the result.
+  list: protectedProcedure.input(roastQuerySchema.optional()).query(async ({ ctx, input }) => {
+    const { sortKey, ...criteria } = roastQuerySchema.parse(input ?? {});
+    const roasts = await ctx.prisma.roast.findMany({
+      where: buildRoastWhere(ctx.userId, criteria),
       orderBy: { roastDate: "desc" },
       include: { cuppingSessions: { orderBy: { cuppedAt: "asc" }, include: { scores: true } } },
+    });
+    return sortRoasts(roasts, sortKey);
+  }),
+
+  /// Distinct origins the caller has used, for the origin filter's options.
+  origins: protectedProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.prisma.roast.findMany({
+      where: { userId: ctx.userId, origin: { not: null } },
+      distinct: ["origin"],
+      select: { origin: true },
+      orderBy: { origin: "asc" },
+    });
+    return rows.map((r) => r.origin!);
+  }),
+
+  /// Op_ComputeRoastComparison: per-attribute latest scores for two of the
+  /// caller's roasts that share an origin, process or roast level.
+  compare: protectedProcedure
+    .input(z.object({ roastIdA: z.string().uuid(), roastIdB: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      if (input.roastIdA === input.roastIdB) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Pick two different roasts to compare" });
+      }
+      const found = await ctx.prisma.roast.findMany({
+        where: { id: { in: [input.roastIdA, input.roastIdB] }, userId: ctx.userId },
+        include: { cuppingSessions: { include: { scores: true } } },
+      });
+      const roastA = found.find((r) => r.id === input.roastIdA);
+      const roastB = found.find((r) => r.id === input.roastIdB);
+      if (!roastA || !roastB) throw notFound();
+
+      const shared = sharedDimensions(roastA, roastB);
+      if (shared.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Roasts can only be compared if they share an origin, process, or roast level",
+        });
+      }
+      return { roastA, roastB, shared, rows: buildComparison(roastA, roastB) };
     }),
-  ),
 
   byId: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))

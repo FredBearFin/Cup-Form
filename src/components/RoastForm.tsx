@@ -10,13 +10,11 @@ export function RoastForm({
   initialValues,
   submitLabel,
   isPending,
-  errorMessage,
   onSubmit,
 }: {
   initialValues: RoastFormValues;
   submitLabel: string;
   isPending: boolean;
-  errorMessage?: string;
   onSubmit: (values: RoastFormValues) => void;
 }) {
   const [form, setForm] = useState(initialValues);
@@ -104,7 +102,6 @@ export function RoastForm({
       >
         {isPending ? "Saving..." : submitLabel}
       </button>
-      {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
     </form>
   );
 }

@@ -4,6 +4,7 @@ import { use, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc/client";
+import { useToast } from "@/components/ToastProvider";
 import { CuppingForm } from "@/components/CuppingForm";
 import { QueryError } from "@/components/QueryError";
 import { ScoreTrendChart } from "@/components/ScoreTrendChart";
@@ -15,18 +16,21 @@ export default function RoastDetailPage({ params }: { params: Promise<{ id: stri
   const { id } = use(params);
   const router = useRouter();
   const utils = trpc.useUtils();
+  const toast = useToast();
   const roastQuery = trpc.roast.byId.useQuery({ id });
   const [showForm, setShowForm] = useState(false);
 
   const deleteRoast = trpc.roast.delete.useMutation({
     onSuccess: async () => {
       await utils.roast.list.invalidate();
+      toast.success("Roast deleted");
       router.push("/app");
     },
   });
   const deleteSession = trpc.cupping.delete.useMutation({
     onSuccess: async () => {
       await Promise.all([utils.roast.byId.invalidate({ id }), utils.roast.list.invalidate()]);
+      toast.success("Cupping deleted");
     },
   });
 
@@ -88,7 +92,6 @@ export default function RoastDetailPage({ params }: { params: Promise<{ id: stri
           {roast.roastLevel ? ` · ${roastLevelLabel(roast.roastLevel)}` : ""}
         </p>
         {roast.notes && <p className="mt-2 text-sm">{roast.notes}</p>}
-        {deleteRoast.isError && <p className="mt-2 text-sm text-red-600">{deleteRoast.error.message}</p>}
       </div>
 
       <div className="rounded-md border border-neutral-200 p-4">
@@ -116,8 +119,6 @@ export default function RoastDetailPage({ params }: { params: Promise<{ id: stri
         {roast.cuppingSessions.length === 0 && !showForm && (
           <p className="text-sm text-neutral-500">No cuppings logged for this roast yet.</p>
         )}
-
-        {deleteSession.isError && <p className="mb-2 text-sm text-red-600">{deleteSession.error.message}</p>}
 
         <ul className="flex flex-col gap-3">
           {roast.cuppingSessions.map((session) => {

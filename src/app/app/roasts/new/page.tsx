@@ -2,15 +2,18 @@
 
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc/client";
+import { useToast } from "@/components/ToastProvider";
 import { RoastForm } from "@/components/RoastForm";
 import { emptyRoastForm, toRoastPayload } from "@/lib/roast/form";
 
 export default function NewRoastPage() {
   const router = useRouter();
+  const toast = useToast();
   const utils = trpc.useUtils();
   const createRoast = trpc.roast.create.useMutation({
     onSuccess: async (roast) => {
       await utils.roast.list.invalidate();
+      toast.success("Roast saved");
       router.push(`/app/roasts/${roast.id}`);
     },
   });
@@ -22,7 +25,6 @@ export default function NewRoastPage() {
         initialValues={emptyRoastForm()}
         submitLabel="Save roast"
         isPending={createRoast.isPending}
-        errorMessage={createRoast.error?.message}
         onSubmit={(values) => createRoast.mutate(toRoastPayload(values, undefined))}
       />
     </div>

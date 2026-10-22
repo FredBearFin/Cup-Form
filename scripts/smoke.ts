@@ -28,6 +28,24 @@ await report.run("/app/history is protected too", async () => {
   }
 });
 
+await report.run("/app/settings and /app/compare are protected too", async () => {
+  for (const path of ["/app/settings", "/app/compare"]) {
+    const res = await get(path);
+    if (new URL(res.headers.get("location") ?? "/", base).pathname !== "/login") {
+      throw new Error(`${path}: status ${res.status}`);
+    }
+  }
+});
+
+await report.run("/api/export rejects unauthenticated requests", async () => {
+  const res = await get("/api/export", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ format: "CSV", roastIds: ["a0000000-0000-4000-8000-000000000001"] }),
+  });
+  if (res.status !== 401) throw new Error(`expected 401, got ${res.status}`);
+});
+
 await report.run("/auth/callback without a code does not crash", async () => {
   const res = await get("/auth/callback");
   if (res.status >= 500) throw new Error(`status ${res.status}`);
